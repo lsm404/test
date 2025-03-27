@@ -15,29 +15,21 @@
  * limitations under the License.
  */
 
-import type { Component } from 'vue'
-import utils from '@/utils'
+import { LocationQueryRaw, useRouter } from 'vue-router'
+import type { Router } from 'vue-router'
+import { MenuOption } from 'naive-ui'
 
-// All TSX files under the views folder automatically generate mapping relationship
-const modules = import.meta.glob('/src/views/**/**.tsx')
-const components: { [key: string]: Component } = utils.mapping(modules)
+export function useMenuClick() {
+  const router: Router = useRouter()
 
-export default {
-  path: '/ui-setting',
-  name: 'ui-setting',
-  meta: { title: '设置' },
-  component: () => import('@/layouts/content'),
-  children: [
-    {
-      path: '',
-      name: 'ui-setting-detail',
-      component: components['ui-setting'],
-      meta: {
-        title: '设置',
-        activeMenu: 'ui-setting',
-        showSide: false,
-        auth: []
-      }
-    }
-  ]
+  const handleMenuClick = (key: string, menuOption: MenuOption) => {
+    router.push({
+      path: `${key}`,
+      query: menuOption.payload ? (menuOption.payload as LocationQueryRaw) : {}
+    })
+  }
+
+  return {
+    handleMenuClick
+  }
 }

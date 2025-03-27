@@ -15,29 +15,24 @@
  * limitations under the License.
  */
 
-import type { Component } from 'vue'
-import utils from '@/utils'
+import { DropdownOption } from 'naive-ui'
+import { useI18n } from 'vue-i18n'
+import cookies from 'js-cookie'
+import { useLocalesStore } from '@/store/locales/locales'
+import type { Locales } from '@/store/locales/types'
 
-// All TSX files under the views folder automatically generate mapping relationship
-const modules = import.meta.glob('/src/views/**/**.tsx')
-const components: { [key: string]: Component } = utils.mapping(modules)
+export function useDropDown(chooseVal: any) {
+  const { locale } = useI18n()
+  const localesStore = useLocalesStore()
 
-export default {
-  path: '/ui-setting',
-  name: 'ui-setting',
-  meta: { title: '设置' },
-  component: () => import('@/layouts/content'),
-  children: [
-    {
-      path: '',
-      name: 'ui-setting-detail',
-      component: components['ui-setting'],
-      meta: {
-        title: '设置',
-        activeMenu: 'ui-setting',
-        showSide: false,
-        auth: []
-      }
-    }
-  ]
+  const handleSelect = (key: string | number, option: DropdownOption) => {
+    // console.log(key, option)
+    chooseVal.value = option.label
+    locale.value = key as Locales
+    localesStore.setLocales(locale.value as Locales)
+    cookies.set('language', locale.value, { path: '/' })
+  }
+  return {
+    handleSelect
+  }
 }
