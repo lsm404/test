@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-import { defineComponent, ref } from 'vue'
+import { defineComponent, ref, Fragment } from 'vue'
 import { DagSidebar } from './dag-sidebar'
 import { DagCanvas } from './dag-canvas'
 import { useDagStore } from '@/store/project/dynamic/dag'

@@ -32,6 +32,7 @@ import type {
 interface Options {
   graph: Ref<Graph | undefined>
   definition: Ref<WorkflowDefinition | undefined>
+  onNodeClick?: (type: string, name: string) => void
 }
 
 /**
@@ -40,7 +41,7 @@ interface Options {
  * @returns
  */
 export function useTaskEdit(options: Options) {
-  const { graph, definition } = options
+  const { graph, definition, onNodeClick } = options
   const {
     addNode,
     removeNode,
@@ -66,18 +67,21 @@ export function useTaskEdit(options: Options) {
     name: ''
   })
   const taskModalVisible = ref(false)
+  const sqlModalVisible = ref(false)
+  const createModalVisible = ref(false)
 
   /**
    * Append a new task
    */
   function appendTask(code: number, type: TaskType, coordinate: Coordinate) {
     addNode(code + '', type, '', 'YES', coordinate)
-    processDefinition.value.taskDefinitionList.push({
-      code,
-      taskType: type,
-      name: ''
-    })
-    openTaskModal({ code, taskType: type, name: '' })
+    // workflowDefinition.value.taskDefinitionList.push({
+    //   code,
+    //   taskType: type,
+    //   name: ''
+    // })
+    // openTaskModal({ code, taskType: type, name: '' })
+    openCreateModal({ code, taskType: type, name: '' })
   }
 
   /**
@@ -145,15 +149,23 @@ export function useTaskEdit(options: Options) {
    * @param {number} code
    */
   function editTask(code: number) {
-    const definition = processDefinition.value.taskDefinitionList.find(
+    const task = processDefinition.value.taskDefinitionList.find(
       (t) => t.code === code
     )
-    if (definition) {
-      currTask.value = definition
+    if (task && onNodeClick) {
+      currTask.value = task
+      if (task.taskType === 'SQL' || task.taskType === 'SHELL') {
+        onNodeClick('sql', task.name || '')
+      } else if (task.taskType === 'SPARK') {
+        onNodeClick('scala', task.name || '')
+      } else if (task.taskType === 'JAVA') {
+        onNodeClick('java', task.name || '')
+      } else if (task.taskType === 'PYTHON') {
+        onNodeClick('python', task.name || '')
+      } else if (task.taskType === 'DATAX') {
+        onNodeClick('datax', task.name || '')
+      }
     }
-    updatePreTasks(getSources(String(code)), code)
-    updatePostTasks(code)
-    taskModalVisible.value = true
   }
 
   /**
@@ -248,6 +260,50 @@ export function useTaskEdit(options: Options) {
     })
   }
 
+  const sqlConfirm = (data: any) => {
+    // 处理 SQL 任务的保存逻辑
+    sqlModalVisible.value = false
+  }
+
+  const sqlCancel = () => {
+    sqlModalVisible.value = false
+  }
+
+  const createModalConfirm = ({ data }: any) => {
+    // 处理表单数据
+    const taskDef = formatParams(data).taskDefinitionJsonObj as NodeData
+
+    // 更新任务定义列表
+    processDefinition.value.taskDefinitionList.push({
+      ...taskDef,
+      code: currTask.value.code,
+      taskType: currTask.value.taskType,
+      name: data.name,
+      description: data.description
+    })
+    // 设置节点名称
+    setNodeName(currTask.value.code + '', data.name)
+
+    // 关闭弹窗
+    createModalVisible.value = false
+  }
+
+  const createModalCancel = () => {
+    createModalVisible.value = false
+    if (!currTask.value.name) {
+      removeNode(String(currTask.value.code))
+      remove(
+        processDefinition.value.taskDefinitionList,
+        (task) => task.code === currTask.value.code
+      )
+    }
+  }
+
+  function openCreateModal(task: NodeData) {
+    currTask.value = task
+    createModalVisible.value = true
+  }
+
   onMounted(() => {
     if (graph.value) {
       graph.value.on('cell:dblclick', ({ cell }) => {
@@ -264,12 +320,18 @@ export function useTaskEdit(options: Options) {
   return {
     currTask,
     taskModalVisible,
+    sqlModalVisible,
     processDefinition,
     taskConfirm,
     taskCancel,
+    sqlConfirm,
+    sqlCancel,
     appendTask,
     editTask,
     copyTask,
-    removeTasks
+    removeTasks,
+    createModalVisible,
+    createModalConfirm,
+    createModalCancel
   }
 }

@@ -1,0 +1,141 @@
+kind: pipeline
+name: dev
+type: docker
+trigger:
+  ref:
+    - refs/heads/dev
+    - refs/heads/master
+    - refs/heads/test-*
+    - refs/heads/release-*
+    - refs/tags/*
+
+volumes:
+  - name: node_modules
+    host:
+      path: /tmp/cache
+  - name: docker
+    host:
+      path: /var/run/docker.sock
+
+steps:
+  - name: restore-cache
+    image: registry.cn-hangzhou.aliyuncs.com/ps_base/drone-volume-cache
+    pull: if-not-exists
+    volumes:
+      - name: node_modules
+        path: /cache
+    settings:
+      restore: true
+      mount:
+        - ./node_modules
+
+  - name: build-web
+    image: node:18.20.4-slim
+    pull: if-not-exists
+    volumes:
+      - name: node_modules
+        path: /drone/src/node_modules
+    commands:
+      - npm config set registry http://registry.npmmirror.com
+      - npm install
+      - npm run build:prod
+    depends_on:
+      - restore-cache
+  - name: rebuild-cache
+    image: registry.cn-hangzhou.aliyuncs.com/ps_base/drone-volume-cache
+    volumes:
+      - name: node_modules
+        path: /cache
+    settings:
+      rebuild: true
+      mount:
+        - ./node_modules
+      local: false
+    depends_on:
+      - build-web
+  - name: publish-web-dev
+    image: registry.cn-hangzhou.aliyuncs.com/ps_base/docker
+    privileged: true
+    settings:
+      mirror: https://docker.mirrors.ustc.edu.cn
+      registry: pingshu.pinghu.gov.cn
+      repo: pingshu.pinghu.gov.cn/data/dolphinscheduler-ui
+      tag: ${DRONE_BRANCH}-${DRONE_BUILD_NUMBER}
+      password:
+        from_secret: docker_password
+      username:
+        from_secret: docker_username
+      purge: true
+    depends_on:
+      - build-web
+    when:
+      branch:
+        - dev
+  - name: publish-web-test-release
+    image: registry.cn-hangzhou.aliyuncs.com/ps_base/docker
+    privileged: true
+    settings:
+      mirror: https://docker.mirrors.ustc.edu.cn
+      registry: pingshu.pinghu.gov.cn
+      repo: pingshu.pinghu.gov.cn/data/dolphinscheduler-ui
+      tag: ${DRONE_BRANCH}
+      password:
+        from_secret: docker_password
+      username:
+        from_secret: docker_username
+      purge: true
+    depends_on:
+      - build-web
+    when:
+      branch:
+        - test-*
+        - release-*
+        - master
+  - name: deploy-web-dev
+    image: registry.cn-hangzhou.aliyuncs.com/ps_base/drone-k8s-update
+    settings:
+      kubernetes_server: https://10.22.250.138:8443/k8s/clusters/c-m-sdtgt6pm
+      kubernetes_token:
+        from_secret: zjps_k8s_token
+      namespace: data-ps
+      deploy_resource:
+        - repo: pingshu.pinghu.gov.cn/data/dolphinscheduler-ui
+          deployment: dolphinscheduler-ui
+          container: dolphinscheduler-ui
+      tag: ${DRONE_BRANCH}-${DRONE_BUILD_NUMBER}
+    depends_on:
+      - publish-web-dev
+    when:
+      branch:
+        - dev
+
+---
+kind: pipeline
+name: notify
+type: docker
+clone:
+  disable: true
+trigger:
+  ref:
+    - refs/heads/dev
+    - refs/heads/test-*
+    - refs/heads/release-*
+    - refs/heads/master
+depends_on:
+  - dev
+steps:
+  - name: dingtalk-notify
+    image: registry.cn-hangzhou.aliyuncs.com/ps_base/drone-dingtalk-message
+    settings:
+      token:
+        from_secret: dingding_token
+      secret:
+        from_secret: dingding_secret
+      tips_title: AI对话框(ci/cd)
+      template: ps_base
+      debug: true
+      sha_link: true
+    when:
+      status:
+        - failure
+        - success

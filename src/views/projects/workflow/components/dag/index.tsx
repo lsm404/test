@@ -41,7 +41,8 @@ import {
   useTaskEdit,
   useBusinessMapper,
   useNodeMenu,
-  useNodeStatus
+  useNodeStatus,
+  useCellUpdate
 } from './dag-hooks'
 import { useThemeStore } from '@/store/theme/theme'
 import VersionModal from '../../definition/components/version-modal'
@@ -59,6 +60,13 @@ import { useUISettingStore } from '@/store/ui-setting/ui-setting'
 import { executeTask } from '@/service/modules/executors'
 import { removeTaskInstanceCache } from '@/service/modules/task-instances'
 import DependenciesModal from '@/views/projects/components/dependencies/dependencies-modal'
+import CreateModal from '@/views/projects/task/components/node/create-modal'
+import SQLDrawer from './drawer/sql-drawer'
+import JavaDrawer from './drawer/java-drawer'
+import PythonDrawer from './drawer/python-drawer'
+import HttpDrawer from './drawer/http-drawer'
+import ShellDrawer from './drawer/shell-drawer'
+import DataxDrawer from './drawer/datax-drawer'
 
 const props = {
   // If this prop is passed, it means from definition detail
@@ -77,6 +85,22 @@ const props = {
   projectCode: {
     type: Number as PropType<number>,
     default: 0
+  },
+  onSave: {
+    type: Function,
+    required: true
+  },
+  onNodeClick: {
+    type: Function as PropType<(type: string, name: string) => void>,
+    required: true
+  },
+  workflowName: {
+    type: String,
+    default: ''
+  },
+  readonlyName: {
+    type: Boolean,
+    default: false
   }
 }
 
@@ -110,17 +134,42 @@ export default defineComponent({
     } = useGraphAutoLayout({ graph })
 
     // Edit task
+    // const {
+    //   taskConfirm,
+    //   taskModalVisible,
+    //   sqlModalVisible,
+    //   currTask,
+    //   taskCancel,
+    //   sqlConfirm,
+    //   sqlCancel,
+    //   appendTask,
+    //   editTask,
+    //   copyTask,
+    //   workflowDefinition,
+    //   removeTasks
+    // } = useTaskEdit({ graph, definition: toRef(props, 'definition') })
+
     const {
       taskConfirm,
       taskModalVisible,
+      sqlModalVisible,
+      createModalVisible,
       currTask,
       taskCancel,
+      sqlConfirm,
+      sqlCancel,
       appendTask,
       editTask,
       copyTask,
       processDefinition,
-      removeTasks
-    } = useTaskEdit({ graph, definition: toRef(props, 'definition') })
+      removeTasks,
+      createModalConfirm,
+      createModalCancel
+    } = useTaskEdit({
+      graph,
+      definition: toRef(props, 'definition'),
+      onNodeClick: props.onNodeClick
+    })
 
     // Right click cell
     const { nodeVariables, menuHide, menuStart, viewLog } = useNodeMenu({
@@ -216,8 +265,9 @@ export default defineComponent({
       if (typeof bool === 'boolean') {
         saveModalShow.value = bool
       } else {
-        saveModalShow.value = !versionModalShow.value
+        saveModalShow.value = !saveModalShow.value
       }
+      console.log('saveModalShow is now:', saveModalShow.value)
     }
     const { getConnects, getLocations } = useBusinessMapper()
     const onSave = (saveForm: any) => {
@@ -368,6 +418,119 @@ export default defineComponent({
 
     onBeforeUnmount(() => clearInterval(statusTimerRef.value))
 
+    // 添加抽屉相关的状态
+    const drawerVisible = ref(false)
+    const currentNode = ref<any>(null)
+
+    // 添加一个点击延时变量
+    const clickTimer = ref<number | null>(null)
+    const clickDelay = 300 // 毫秒
+
+    // 修改单击处理函数
+    const handleNodeClick = (node: any) => {
+      // 清除之前的点击计时器
+      if (clickTimer.value !== null) {
+        clearTimeout(clickTimer.value)
+        clickTimer.value = null
+      }
+
+      // 延迟处理单击事件，给双击事件留出触发的机会
+      clickTimer.value = setTimeout(() => {
+        console.log('Node clicked, data:', node)
+        // 确保节点数据正确设置
+        if (!node) {
+          return
+        }
+
+        currentNode.value = node
+        drawerVisible.value = true
+
+        // 重置计时器引用
+        clickTimer.value = null
+      }, clickDelay) as unknown as number
+    }
+
+    // 修改双击处理函数
+    const handleNodeDblClick = (node: any) => {
+      // 取消单击事件处理
+      if (clickTimer.value !== null) {
+        clearTimeout(clickTimer.value)
+        clickTimer.value = null
+      }
+
+      // 正常处理双击事件
+      if (node.type === 'SHELL' || node.type === 'SQL') {
+        props.onNodeClick?.('sql', node.code)
+      } else if (node.type === 'SPARK') {
+        props.onNodeClick?.('scala', node.code)
+      } else if (node.type === 'JAVA') {
+        props.onNodeClick?.('java', node.name || 'Java Editor')
+      }
+    }
+
+    // 监听图形事件
+    watch(
+      () => graph.value,
+      (newGraph) => {
+        if (newGraph) {
+          newGraph.on('cell:click', ({ cell }) => {
+            console.log('Cell clicked:', cell)
+            if (cell.isNode()) {
+              handleNodeClick(cell.getData())
+            }
+          })
+
+          newGraph.on('cell:dblclick', ({ cell }) => {
+            if (cell.isNode()) {
+              handleNodeDblClick(cell.getData())
+            }
+          })
+        }
+      }
+    )
+
+    watch(
+      () => props.workflowName,
+      (newVal) => {
+        console.log('Dag workflowName changed:', newVal)
+      }
+    )
+
+    const {
+      setNodeName
+      // 如果需要的话，也可以引入其他方法
+      // setNodeFillColor
+    } = useCellUpdate({
+      graph
+    })
+
+    // 修改关闭抽屉的处理函数
+    const handleCloseDrawer = () => {
+      drawerVisible.value = false
+    }
+
+    // 在组件中使用computed属性判断节点类型
+    const nodeType = computed(() => {
+      if (!currentNode.value) return 'default'
+
+      const type = (currentNode.value.taskType || '').toUpperCase()
+      if (type === 'JAVA' || type === 'SPARK') {
+        return 'java'
+      } else if (type === 'PYTHON') {
+        return 'python'
+      } else if (type === 'HTTP') {
+        return 'http'
+      } else if (type === 'SHELL') {
+        return 'shell'
+      } else if (type === 'SQL') {
+        return 'sql'
+      } else if (type === 'DATAX') {
+        return 'datax'
+      } else {
+        return 'default'
+      }
+    })
+
     return () => (
       <div
         class={[
@@ -409,6 +572,20 @@ export default defineComponent({
           onSave={onSave}
           definition={props.definition}
           instance={props.instance}
+          workflowName={props.workflowName}
+          readonlyName={props.readonlyName}
+        />
+        <CreateModal
+          readonly={props.readonly}
+          show={createModalVisible.value}
+          projectCode={props.projectCode}
+          workflowInstance={props.instance}
+          taskInstance={currentTaskInstance.value}
+          onViewLog={handleViewLog}
+          data={currTask.value as any}
+          definition={processDefinition}
+          onSubmit={createModalConfirm}
+          onCancel={createModalCancel}
         />
         <TaskModal
           readonly={props.readonly}
@@ -467,6 +644,84 @@ export default defineComponent({
             onDownloadLogs={downloadLogs}
           />
         )}
+        {/* 使用switch语句根据节点类型渲染对应的抽屉 */}
+        {(() => {
+          switch (nodeType.value) {
+            case 'java':
+              return (
+                <JavaDrawer
+                  visible={drawerVisible.value}
+                  nodeData={currentNode.value}
+                  graph={graph.value}
+                  setNodeName={setNodeName}
+                  onClose={handleCloseDrawer}
+                  onUpdate:visible={(v: boolean) => (drawerVisible.value = v)}
+                  onUpdate:nodeData={(v: any) => (currentNode.value = v)}
+                />
+              )
+            case 'python':
+              return (
+                <PythonDrawer
+                  visible={drawerVisible.value}
+                  nodeData={currentNode.value}
+                  graph={graph.value}
+                  setNodeName={setNodeName}
+                  onClose={handleCloseDrawer}
+                  onUpdate:visible={(v: boolean) => (drawerVisible.value = v)}
+                  onUpdate:nodeData={(v: any) => (currentNode.value = v)}
+                />
+              )
+            case 'http':
+              return (
+                <HttpDrawer
+                  visible={drawerVisible.value}
+                  nodeData={currentNode.value}
+                  graph={graph.value}
+                  setNodeName={setNodeName}
+                  onClose={handleCloseDrawer}
+                  onUpdate:visible={(v: boolean) => (drawerVisible.value = v)}
+                  onUpdate:nodeData={(v: any) => (currentNode.value = v)}
+                />
+              )
+            case 'shell':
+              return (
+                <ShellDrawer
+                  visible={drawerVisible.value}
+                  nodeData={currentNode.value}
+                  graph={graph.value}
+                  setNodeName={setNodeName}
+                  onClose={handleCloseDrawer}
+                  onUpdate:visible={(v: boolean) => (drawerVisible.value = v)}
+                  onUpdate:nodeData={(v: any) => (currentNode.value = v)}
+                />
+              )
+            case 'datax':
+              return (
+                <DataxDrawer
+                  visible={drawerVisible.value}
+                  nodeData={currentNode.value}
+                  graph={graph.value}
+                  setNodeName={setNodeName}
+                  onClose={handleCloseDrawer}
+                  onUpdate:visible={(v: boolean) => (drawerVisible.value = v)}
+                  onUpdate:nodeData={(v: any) => (currentNode.value = v)}
+                />
+              )
+            case 'sql':
+            default:
+              return (
+                <SQLDrawer
+                  visible={drawerVisible.value}
+                  nodeData={currentNode.value}
+                  graph={graph.value}
+                  setNodeName={setNodeName}
+                  onClose={handleCloseDrawer}
+                  onUpdate:visible={(v: boolean) => (drawerVisible.value = v)}
+                  onUpdate:nodeData={(v: any) => (currentNode.value = v)}
+                />
+              )
+          }
+        })()}
       </div>
     )
   }

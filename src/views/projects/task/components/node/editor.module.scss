@@ -1,0 +1,46 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.toolbar {
+  padding: 8px;
+  border-bottom: 1px solid #e8e8e8;
+  background: #fafafa;
+  display: flex;
+  gap: 8px;
+}
+
+.toolButton {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  color: #666;
+  font-size: 14px;
+  
+  &:hover {
+    color: #1890ff;
+    background: #e6f7ff;
+    border-radius: 2px;
+  }
+
+  &:disabled {
+    color: #bfbfbf;
+    cursor: not-allowed;
+    
+    &:hover {
+      background: none;
+    }
+  }
+
+  .n-icon {
+    font-size: 16px;
+  }
+}
+
+.editor {
+  flex: 1;
+  overflow: hidden;
+} 

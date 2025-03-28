@@ -1,0 +1,71 @@
+.container {
+  padding: 16px;
+}
+
+.progress {
+  margin-bottom: 16px;
+}
+
+.steps {
+  margin-bottom: 16px;
+}
+
+.info {
+  margin-bottom: 16px;
+}
+
+.infoItem {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--n-border-color);
+  
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.time {
+  color: var(--n-text-color-secondary);
+}
+
+.stepFlow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 16px;
+  
+  .step {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    color: #999;
+    
+    .icon {
+      font-size: 20px;
+    }
+    
+    &.success {
+      color: #52c41a;
+    }
+    
+    &.error {
+      color: #ff4d4f;
+    }
+  }
+  
+  .arrow {
+    margin: 0 16px;
+    color: #999;
+    font-size: 16px;
+  }
+}
+
+.title {
+  font-size: 16px;
+  font-weight: 500;
+  color: #333;
+  margin-bottom: 16px;
+  padding-left: 8px;
+  border-left: 4px solid #1890ff;
+} 
